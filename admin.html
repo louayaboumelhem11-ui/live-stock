@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="top">
+    <button class="btn" onclick="location.href='index.html'">← Shop</button>
+    <div class="search"><input id="pass" placeholder="Admin password"/></div>
+    <button class="btn" id="save">Login</button>
+  </div>
+
+  <div style="max-width:1100px;margin:0 auto;padding:14px">
+    <div class="box">
+      <b>Add Stock (paste codes)</b>
+      <div class="row2" style="margin-top:10px">
+        <div class="col">
+          <label>Product</label>
+          <select id="prod"></select>
+          <label style="margin-top:10px">Codes (one per line)</label>
+          <textarea id="codes" rows="8" placeholder="CODE1\nCODE2\nCODE3"></textarea>
+          <button class="buy primary" id="addBtn" type="button" style="margin-top:10px">Add Stock</button>
+          <div class="small" id="addRes" style="margin-top:8px"></div>
+        </div>
+        <div class="col">
+          <b>Orders (latest 200)</b>
+          <div class="small">Approve will randomly assign codes and show them to customer in Order page.</div>
+          <div id="orders" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+let pass = localStorage.getItem('admin_pass') || '';
+document.getElementById('pass').value = pass;
+
+document.getElementById('save').onclick = ()=>{
+  pass = document.getElementById('pass').value.trim();
+  localStorage.setItem('admin_pass', pass);
+  refresh();
+};
+
+function headers(){
+  return {'Content-Type':'application/json','x-admin-password': pass};
+}
+
+async function refresh(){
+  const prods = await fetch('/api/products').then(r=>r.json());
+  const sel = document.getElementById('prod');
+  sel.innerHTML = '';
+  (prods.products||[]).forEach(p=>{
+    const opt = document.createElement('option');
+    opt.value = p.slug;
+    opt.textContent = `${p.title} (${p.category}) — stock: ${p.stock}`;
+    sel.appendChild(opt);
+  });
+  await loadOrders();
+}
+
+async function loadOrders(){
+  const box = document.getElementById('orders');
+  box.innerHTML = 'Loading...';
+  const res = await fetch('/api/admin/orders', { headers: headers() });
+  const data = await res.json();
+  if (!data.ok){ box.innerHTML = `<div class="small">${data.error||'Error'}</div>`; return; }
+
+  box.innerHTML = (data.orders||[]).map(o=>{
+    const btns = o.status==='PENDING'
+      ? `<button class="btn" onclick="approve('${o.order_id}')">Approve</button>
+         <button class="btn" onclick="reject('${o.order_id}')">Reject</button>`
+      : '';
+    return `
+      <div class="box" style="margin:10px 0">
+        <b>${o.order_id}</b> — ${o.product_title}<br/>
+        <span class="small">Qty: ${o.qty} | Total: $${Number(o.total_usd).toFixed(2)} | Pay: ${o.pay_method}</span><br/>
+        <span class="small">TxID: ${o.txid}</span><br/>
+        <b>Status:</b> ${o.status}<br/>
+        ${btns}
+        <a class="btn" style="display:inline-block;margin-top:8px" href="order.html?id=${encodeURIComponent(o.order_id)}" target="_blank">Open</a>
+      </div>`;
+  }).join('') || '<div class="small">No orders</div>';
+}
+
+document.getElementById('addBtn').onclick = async ()=>{
+  const product_slug = document.getElementById('prod').value;
+  const codes_text = document.getElementById('codes').value;
+  const res = await fetch('/api/admin/stock/add', {
+    method:'POST',
+    headers: headers(),
+    body: JSON.stringify({ product_slug, codes_text })
+  });
+  const data = await res.json();
+  document.getElementById('addRes').textContent = data.ok
+    ? `Added ${data.added}. New stock: ${data.stock}`
+    : (data.error || 'Error');
+  if (data.ok) document.getElementById('codes').value = '';
+  refresh();
+};
+
+async function approve(order_id){
+  const res = await fetch('/api/admin/order/approve', {
+    method:'POST', headers: headers(), body: JSON.stringify({ order_id })
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error||'Error');
+  alert('Approved. Codes assigned: ' + (data.codes||[]).length);
+  refresh();
+}
+async function reject(order_id){
+  const res = await fetch('/api/admin/order/reject', {
+    method:'POST', headers: headers(), body: JSON.stringify({ order_id })
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error||'Error');
+  refresh();
+}
+
+refresh();
+</script>
+</body>
+</html>

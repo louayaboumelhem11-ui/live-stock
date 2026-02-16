@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Checkout</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="top">
+    <button class="btn" onclick="location.href='index.html'">← Back</button>
+    <div class="search"><div class="pill" id="storeName">LIVE STOCK</div></div>
+    <button class="btn" onclick="location.href='orders.html'">My Orders</button>
+  </div>
+
+  <div style="max-width:900px;margin:0 auto;padding:14px">
+    <div class="box" id="productBox"></div>
+
+    <div class="box warn">
+      <b>Note:</b> Times are estimated. After you send payment and TxID, we usually respond within minutes.
+    </div>
+
+    <div class="box">
+      <label>Quantity</label>
+      <input id="qty" type="number" min="1" value="1"/>
+      <div class="small" id="qtyHint"></div>
+
+      <label style="margin-top:10px">Pay method</label>
+      <select id="method"></select>
+
+      <div class="row2" style="margin-top:12px">
+        <div class="col">
+          <div class="box">
+            <b>Address</b>
+            <div style="margin-top:8px"><code id="addr"></code></div>
+            <div class="small" id="eta" style="margin-top:6px"></div>
+            <div style="margin-top:10px"><button class="btn" id="copyBtn" type="button">Copy</button></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="box">
+            <b>QR</b>
+            <div id="qr" style="margin-top:10px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box">
+      <h3>Confirm payment</h3>
+      <label>TxID</label>
+      <input id="txid" placeholder="Paste your TxID here"/>
+
+      <label style="margin-top:10px">Contact (optional)</label>
+      <input id="contact" placeholder="Telegram or email"/>
+
+      <button class="buy primary" id="submitBtn" type="button" style="margin-top:12px">Create Order</button>
+      <p id="result" class="small" style="margin-top:10px"></p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script>
+    let product = null;
+    let METHODS = [];
+    let CONFIG = {storeName:"LIVE STOCK"};
+
+    function money(x){ return '$' + Number(x).toFixed(2); }
+
+    async function init(){
+      const c = await fetch('/api/config').then(r=>r.json());
+      if (c.ok) CONFIG = c;
+      document.getElementById('storeName').textContent = CONFIG.storeName;
+
+      const raw = localStorage.getItem('buy_product');
+      if (raw) product = JSON.parse(raw);
+
+      if (!product){
+        document.getElementById('productBox').innerHTML = '<b>No product selected.</b> Go back and choose a product.';
+        document.getElementById('submitBtn').disabled = true;
+        return;
+      }
+
+      document.getElementById('productBox').innerHTML =
+        `<b>Product:</b> ${product.title} — <b>Unit:</b> ${money(product.unit_price_usd)} — <span class="small">Category: ${product.category}</span>`;
+
+      const pm = await fetch('/api/pay-methods').then(r=>r.json());
+      METHODS = pm.methods || [];
+      const sel = document.getElementById('method');
+      METHODS.forEach(m=>{
+        const opt = document.createElement('option');
+        opt.value = m.key; opt.textContent = m.label;
+        sel.appendChild(opt);
+      });
+
+      sel.addEventListener('change', renderMethod);
+      renderMethod();
+
+      document.getElementById('qty').addEventListener('input', updateQtyHint);
+      updateQtyHint();
+
+      document.getElementById('copyBtn').addEventListener('click', async ()=>{
+        await navigator.clipboard.writeText(document.getElementById('addr').textContent);
+        alert('Copied');
+      });
+
+      document.getElementById('submitBtn').addEventListener('click', submitOrder);
+    }
+
+    function updateQtyHint(){
+      const q = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
+      const total = product.unit_price_usd * q;
+      document.getElementById('qtyHint').textContent = `Total: ${money(total)} USD`;
+    }
+
+    function renderMethod(){
+      const key = document.getElementById('method').value || METHODS[0]?.key;
+      const m = METHODS.find(x=>x.key===key) || METHODS[0];
+      document.getElementById('addr').textContent = m.address;
+      document.getElementById('eta').textContent = `Estimated time: ${m.eta}`;
+      const qrEl = document.getElementById('qr');
+      qrEl.innerHTML = '';
+      new QRCode(qrEl, { text: m.address, width: 220, height: 220 });
+    }
+
+    async function submitOrder(){
+      const qty = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
+      const pay_method = document.getElementById('method').value;
+      const txid = document.getElementById('txid').value.trim();
+      const contact = document.getElementById('contact').value.trim();
+      if (!txid) return alert('Enter TxID');
+
+      const res = await fetch('/api/order', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ product_slug: product.slug, qty, pay_method, txid, contact })
+      });
+      const data = await res.json();
+      if (!data.ok){
+        alert(data.error || 'Error');
+        return;
+      }
+      document.getElementById('result').innerHTML =
+        `Order created: <b>${data.order_id}</b> — <a href="order.html?id=${encodeURIComponent(data.order_id)}">Open order</a>`;
+      localStorage.setItem('last_order', data.order_id);
+    }
+
+    init();
+  </script>
+</body>
+</html>

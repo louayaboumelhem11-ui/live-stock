@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Order</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="top">
+    <button class="btn" onclick="location.href='index.html'">← Shop</button>
+    <div class="search"><input id="orderIdInput" placeholder="Enter Order ID"/></div>
+    <button class="btn" id="goBtn">Open</button>
+  </div>
+
+  <div style="max-width:900px;margin:0 auto;padding:14px">
+    <div class="box" id="info"></div>
+    <div class="box" id="codes" style="display:none"></div>
+    <div class="box" id="support"></div>
+  </div>
+
+<script>
+let CONFIG = {supportTg:"https://t.me/T_T_C_c_C"};
+
+function qparam(name){
+  const u = new URL(location.href);
+  return u.searchParams.get(name);
+}
+
+async function loadConfig(){
+  const c = await fetch('/api/config').then(r=>r.json());
+  if (c.ok) CONFIG = c;
+  document.getElementById('support').innerHTML =
+    `<b>Need Assistance?</b><div class="small">Send your Order ID to support: <a target="_blank" href="${CONFIG.supportTg}">${CONFIG.supportTg}</a></div>`;
+}
+
+async function loadOrder(orderId){
+  const res = await fetch('/api/order/' + encodeURIComponent(orderId));
+  const data = await res.json();
+  if (!data.ok){
+    document.getElementById('info').innerHTML = '<b>Order not found.</b>';
+    return;
+  }
+  const o = data.order;
+
+  document.getElementById('info').innerHTML = `
+    <b>Order ID:</b> ${o.order_id}<br/>
+    <b>Product:</b> ${o.product_title} (${o.product_category})<br/>
+    <b>Qty:</b> ${o.qty} — <b>Total:</b> $${Number(o.total_usd).toFixed(2)}<br/>
+    <b>Pay:</b> ${o.pay_method} — <b>TxID:</b> <span class="small">${o.txid}</span><br/>
+    <b>Status:</b> <span style="font-weight:900">${o.status}</span><br/>
+    <span class="small">Created: ${o.created_at}${o.approved_at ? " — Approved: " + o.approved_at : ""}</span><br/>
+    <span class="small">Remaining stock: ${data.remaining}</span>
+  `;
+
+  if (o.status === 'APPROVED'){
+    document.getElementById('codes').style.display = 'block';
+    const codes = (data.codes||[]).map(c=>`<div><code>${escapeHtml(c)}</code></div>`).join('');
+    document.getElementById('codes').innerHTML = `<b>Your Codes</b><div class="small">Keep them safe.</div><div style="margin-top:10px">${codes}</div>`;
+  } else {
+    document.getElementById('codes').style.display = 'none';
+  }
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+document.getElementById('goBtn').onclick = ()=>{
+  const id = document.getElementById('orderIdInput').value.trim();
+  if (!id) return;
+  location.href = 'order.html?id=' + encodeURIComponent(id);
+};
+
+loadConfig();
+const id = qparam('id') || localStorage.getItem('last_order') || '';
+document.getElementById('orderIdInput').value = id;
+if (id) loadOrder(id);
+</script>
+</body>
+</html>

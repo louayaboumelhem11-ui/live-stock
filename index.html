@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>LIVE STOCK</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="top">
+    <div class="search"><input id="q" placeholder="Search for a product"/></div>
+    <button class="btn" onclick="location.href='orders.html'">My Orders</button>
+  </div>
+
+  <div class="wrap">
+    <aside class="side">
+      <h3>Menu</h3>
+      <div class="navitem" onclick="location.href='index.html'"><span class="dot"></span> <b>Our Products</b></div>
+      <div class="navitem" onclick="location.href='orders.html'"><span class="dot"></span> <b>My Orders</b></div>
+      <div class="navitem" id="supportBtn"><span class="dot"></span> <b>Need Assistance?</b></div>
+      <div class="navitem" onclick="location.href='admin.html'"><span class="dot"></span> <b>Admin</b></div>
+
+      <h3>Categories</h3>
+      <div class="cat" data-cat="Gaming"><span class="dot"></span> <b>Gaming</b></div>
+      <div class="cat" data-cat="FULL ACCESS"><span class="dot"></span> <b>FULL ACCESS</b></div>
+    </aside>
+
+    <main class="main">
+      <div class="pill" id="activeCat">Category: Gaming</div>
+      <div class="grid" id="list"></div>
+    </main>
+  </div>
+
+<script>
+let PRODUCTS = [];
+let activeCat = "Gaming";
+let CONFIG = {storeName:"LIVE STOCK", supportTg:"https://t.me/T_T_C_c_C"};
+
+async function load() {
+  const c = await fetch('/api/config').then(r=>r.json());
+  if (c.ok) CONFIG = c;
+  document.title = CONFIG.storeName;
+
+  const res = await fetch('/api/products');
+  const data = await res.json();
+  PRODUCTS = data.products || [];
+  render();
+  document.getElementById('supportBtn').onclick = ()=> window.open(CONFIG.supportTg, '_blank');
+}
+
+function render(){
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  document.getElementById('activeCat').textContent = `Category: ${activeCat}`;
+  const items = PRODUCTS.filter(p => p.category === activeCat && (!q || p.title.toLowerCase().includes(q)));
+
+  const el = document.getElementById('list');
+  el.innerHTML = items.map(p => {
+    const out = p.stock <= 0;
+    return `
+      <div class="card">
+        <div class="thumb">
+          <img alt="" src="assets/${p.image_key}.png" onerror="this.style.display='none'"/>
+        </div>
+        <div class="pad">
+          <div class="title">${escapeHtml(p.title)}</div>
+          <div class="muted">Unit price: $${Number(p.unit_price_usd).toFixed(2)} USD</div>
+          <div class="row">
+            <div class="stock">${out ? '<span style="color:var(--danger);font-weight:800">Out of stock</span>' : `Stock: ${p.stock}`}</div>
+            <div class="price">$${Number(p.unit_price_usd).toFixed(2)}</div>
+          </div>
+          <button class="buy" ${out?'disabled':''} onclick="openBuy('${p.slug}')">${out?'Out of stock':'Purchase'}</button>
+        </div>
+      </div>`;
+  }).join('') || `<div class="muted">No products found.</div>`;
+}
+
+function openBuy(slug){
+  const p = PRODUCTS.find(x=>x.slug===slug);
+  localStorage.setItem('buy_product', JSON.stringify(p));
+  location.href = 'checkout.html';
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+document.getElementById('q').addEventListener('input', render);
+document.querySelectorAll('.cat').forEach(c=>{
+  c.addEventListener('click', ()=>{
+    activeCat = c.dataset.cat;
+    render();
+  });
+});
+load();
+</script>
+</body>
+</html>

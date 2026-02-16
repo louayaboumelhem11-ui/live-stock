@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>My Orders</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="top">
+    <button class="btn" onclick="location.href='index.html'">← Shop</button>
+    <div class="search"><input id="id" placeholder="Enter Order ID"/></div>
+    <button class="btn" id="openBtn">Open</button>
+  </div>
+
+  <div style="max-width:900px;margin:0 auto;padding:14px">
+    <div class="box">
+      <b>Tip:</b> After creating an order, save your Order ID.
+    </div>
+  </div>
+
+<script>
+document.getElementById('openBtn').onclick = ()=>{
+  const id = document.getElementById('id').value.trim() || localStorage.getItem('last_order');
+  if (!id) return alert('Enter Order ID');
+  location.href = 'order.html?id=' + encodeURIComponent(id);
+};
+</script>
+</body>
+</html>
